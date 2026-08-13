@@ -1,4 +1,6 @@
 package com.aditya.urlshortener;
+import jakarta.validation.constraints.NotBlank;
+
 
 public class ShortenRequest {
 
