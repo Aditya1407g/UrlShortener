@@ -21,6 +21,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
 
+    @ExceptionHandler(UsernameAlreadyExistsException.class)
+    public ResponseEntity<ValidationErrorResponse> handleUsernameExists(UsernameAlreadyExistsException ex) {
+        List<FieldValidationError> details = List.of(
+                new FieldValidationError("username", "Username already taken")
+        );
+        ValidationErrorResponse body = new ValidationErrorResponse(
+                400,
+                "Bad Request",
+                "Validation failed",
+                details
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ValidationErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
