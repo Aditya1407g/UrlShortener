@@ -13,17 +13,18 @@ public class AuthController {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
 
 
-    public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
     }
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     public RegisterResponse register(@Valid  @RequestBody RegisterRequest request){
-
         if (userRepository.findByUsername(request.getUsername()).isPresent()) {
             throw new UsernameAlreadyExistsException(request.getUsername());
         }
@@ -33,8 +34,20 @@ public class AuthController {
         userRepository.save(user);
 
         return new RegisterResponse("Registration is successful");
+    }
 
+    @PostMapping("/login")
+    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
 
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new InvalidCredentialsException());
+        if(!passwordEncoder.matches(request.getPassword(), user.getPassword())){
+            throw new InvalidCredentialsException();
+        }
+
+        String token = jwtService.generateToken(user.getUsername());
+
+        return new AuthResponse(token);
 
     }
 }
