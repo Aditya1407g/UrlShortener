@@ -12,6 +12,9 @@ public class Url {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false)
+    private Long  userId;
+
     @Column(length = 2048)
     private String longUrl;
 
@@ -56,6 +59,14 @@ public class Url {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
 
     public void setCreatedAt(LocalDateTime createdAt) {
