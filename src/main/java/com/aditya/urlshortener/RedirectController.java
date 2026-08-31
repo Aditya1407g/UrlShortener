@@ -22,7 +22,6 @@ public class RedirectController {
 
     @GetMapping("/{shortCode}")
     public ResponseEntity<Void> redirect(@PathVariable String shortCode){
-        if (shortCode.equals("crash")) throw new RuntimeException("test crash");
         Url url = urlRepository.findByShortCode(shortCode)
                 .orElseThrow(() -> new UrlNotFoundException(shortCode));
 

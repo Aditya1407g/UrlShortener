@@ -2,15 +2,7 @@ package com.aditya.urlshortener;
 
 public class Base62Encoder {
 
-    public static void main(String[] args) {
-        System.out.println(encode(0L));
-        System.out.println(encode(1L));
-        System.out.println(encode(10L));
-        System.out.println(encode(61L));
-        System.out.println(encode(62L));
-        System.out.println(encode(125L));
-        System.out.println(encode(3844L));
-    }
+
 
     private static final String ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
