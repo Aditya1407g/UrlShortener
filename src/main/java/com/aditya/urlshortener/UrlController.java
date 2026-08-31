@@ -2,6 +2,7 @@ package com.aditya.urlshortener;
 
 
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -14,6 +15,8 @@ public class UrlController {
 
     private final UrlRepository urlRepository;
     private final UserRepository userRepository;
+    @Value("${app.base-url}")
+    private String baseUrl;
 
 
     public UrlController(UrlRepository urlRepository, UserRepository userRepository) {
@@ -39,7 +42,7 @@ public class UrlController {
 
         urlRepository.save(url);
 
-        String fullShortUrl = "http://localhost:8080/" + code;
+        String fullShortUrl = baseUrl+"/" + code;
         return new ShortenResponse(fullShortUrl);
     }
 
@@ -57,7 +60,7 @@ public class UrlController {
         List<UrlSummaryResponse> result = urls.stream()
                 .map(url -> new UrlSummaryResponse(
                         url.getLongUrl(),
-                        "http://localhost:8080/" + url.getShortCode(),
+                        baseUrl+ "/" + url.getShortCode(),
                         url.getCreatedAt(),
                         url.getClickCount()
                 ))
