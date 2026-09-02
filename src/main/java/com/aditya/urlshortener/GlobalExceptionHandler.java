@@ -1,15 +1,20 @@
 package com.aditya.urlshortener;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(UrlNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleUrlNotFound(UrlNotFoundException ex) {
@@ -19,6 +24,17 @@ public class GlobalExceptionHandler {
                 ex.getMessage()
         );
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse>  handleNoResourceFound(NoResourceFoundException ex){
+        ErrorResponse err = new ErrorResponse(
+                404,
+                "Not Found",
+                "Resource not found: /" + ex.getResourcePath()
+        );
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(err);
     }
 
     @ExceptionHandler(UsernameAlreadyExistsException.class)
@@ -65,7 +81,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex){
-        ex.printStackTrace();
+        log.error("Unhandled exception", ex);
 
         ErrorResponse body = new ErrorResponse(
                 500,
