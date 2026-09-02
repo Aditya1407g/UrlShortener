@@ -1,0 +1,29 @@
+[Unit]
+Description=URL Shortener Spring Boot Application
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+
+Environment="DB_URL=jdbc:postgresql://localhost:5432/urlshortener"
+Environment="DB_USERNAME=urlshortener_app"
+Environment="DB_PASSWORD=REPLACE_WITH_REAL_PASSWORD"
+Environment="JWT_SECRET=REPLACE_WITH_REAL_JWT_SECRET_STRING"
+Environment="APP_BASE_URL=https://go.adityag.dev"
+
+ExecStart=/usr/bin/java -jar /home/ubuntu/url-shortener-0.0.1-SNAPSHOT.jar
+
+Restart=always
+RestartSec=10
+
+MemoryMax=700M
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=url-shortener
+
+[Install]
+WantedBy=multi-user.target
