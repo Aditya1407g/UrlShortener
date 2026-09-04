@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>URL Shortener API</title>
+<meta name="description" content="A URL shortening service built with Java 21 and Spring Boot, with JWT authentication and PostgreSQL persistence.">
+<meta name="color-scheme" content="dark">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #262c36;
+    --text: #e6edf3;
+    --muted: #9198a1;
+    --accent: #4493f8;
+    --get: #3fb950;
+    --post: #d29922;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 72px 24px 56px;
+  }
+
+  /* ---------- hero ---------- */
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 24px;
+    padding: 4px 12px 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+  }
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--get);
+    flex: none;
+  }
+
+  h1 {
+    margin: 0 0 16px;
+    font-size: clamp(2rem, 7vw, 3rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-weight: 650;
+  }
+
+  .lede {
+    margin: 0 0 32px;
+    max-width: 60ch;
+    font-size: 1.0625rem;
+    color: var(--muted);
+  }
+
+  .lede code {
+    font-family: var(--mono);
+    font-size: 0.9em;
+    color: var(--text);
+  }
+
+  /* ---------- buttons ---------- */
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .btn:hover { background: #1c2129; border-color: #3d444d; }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #04101f;
+  }
+
+  .btn-primary:hover { background: #58a0f9; border-color: #58a0f9; }
+
+  .btn svg { flex: none; }
+
+  a:focus-visible,
+  .btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* ---------- sections ---------- */
+
+  section { margin-top: 56px; }
+
+  h2 {
+    margin: 0 0 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+
+  .hint {
+    margin: 0 0 20px;
+    font-size: 0.875rem;
+    color: var(--muted);
+  }
+
+  /* ---------- endpoint list ---------- */
+
+  .endpoints {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 60px minmax(0, 1fr);
+    gap: 4px 14px;
+    align-items: baseline;
+    padding: 14px 18px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .row:first-child { border-top: 0; }
+
+  .method {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-align: right;
+  }
+
+  .method.get { color: var(--get); }
+  .method.post { color: var(--post); }
+
+  .path {
+    font-family: var(--mono);
+    font-size: 0.875rem;
+    color: var(--text);
+    word-break: break-word;
+  }
+
+  .desc {
+    grid-column: 2;
+    font-size: 0.875rem;
+    color: var(--muted);
+  }
+
+  .lock {
+    font-size: 0.6875rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  /* ---------- try it ---------- */
+
+  .steps {
+    display: grid;
+    gap: 20px;
+  }
+
+  .step-label {
+    margin: 0 0 8px;
+    font-size: 0.8125rem;
+    color: var(--muted);
+  }
+
+  .step-label b {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  pre {
+    margin: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow-x: auto;
+  }
+
+  pre code {
+    display: block;
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    color: var(--text);
+    white-space: pre;
+  }
+
+  .ret {
+    margin: 8px 0 0;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+    overflow-x: auto;
+  }
+
+  .postman {
+    margin: 24px 0 0;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    background: var(--surface);
+    font-size: 0.875rem;
+    color: var(--muted);
+  }
+
+  .postman strong { color: var(--text); font-weight: 600; }
+  .postman code { font-family: var(--mono); font-size: 0.8125rem; color: var(--text); }
+
+  /* ---------- stack ---------- */
+
+  .stack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+
+  .stack li {
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--surface);
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    color: var(--muted);
+  }
+
+  /* ---------- footer ---------- */
+
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 0.875rem;
+    color: var(--muted);
+  }
+
+  footer p { margin: 0 0 8px; }
+  footer strong { color: var(--text); font-weight: 600; }
+
+  footer a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    text-decoration: none;
+  }
+
+  footer a:hover { color: var(--accent); }
+
+  /* ---------- narrow screens ---------- */
+
+  @media (max-width: 480px) {
+    .wrap { padding: 48px 18px 40px; }
+    section { margin-top: 44px; }
+    .row {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+    .method { text-align: left; }
+    .desc { grid-column: 1; }
+    .btn { flex: 1 1 auto; justify-content: center; }
+    pre { padding: 12px 14px; }
+    pre code { font-size: 0.75rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="status"><span class="dot" aria-hidden="true"></span>Operational</p>
+
+    <h1>URL Shortener API</h1>
+
+    <p class="lede">
+      A REST service that turns long URLs into compact base62 short codes and redirects
+      visitors back to the original address, tracking click counts along the way.
+      Links are scoped to their owner using stateless JWT authentication.
+    </p>
+
+    <nav class="actions">
+      <a class="btn btn-primary" href="https://github.com/Aditya1407g/UrlShortener">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-2.91-.88-2.91-2.84 0-.56.2-1.02.53-1.38-.05-.13-.23-.66.05-1.37 0 0 .43-.14 1.41.53a4.8 4.8 0 0 1 1.28-.17c.44 0 .88.06 1.28.17.98-.67 1.41-.53 1.41-.53.28.71.1 1.24.05 1.37.33.36.53.82.53 1.38 0 1.97-1.14 2.64-2.92 2.84.3.26.56.76.56 1.53 0 1.11-.01 2-.01 2.27 0 .21.15.46.55.38A7.99 7.99 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+        </svg>
+        View on GitHub
+      </a>
+      <a class="btn" href="https://github.com/Aditya1407g/UrlShortener">API Documentation</a>
+    </nav>
+  </header>
+
+  <section>
+    <h2>Endpoints</h2>
+    <p class="hint">Full request and response examples are in the repository README.</p>
+
+    <div class="endpoints">
+      <div class="row">
+        <span class="method post">POST</span>
+        <span class="path">/api/auth/register</span>
+        <span class="desc">Create an account with a bcrypt-hashed password.</span>
+      </div>
+      <div class="row">
+        <span class="method post">POST</span>
+        <span class="path">/api/auth/login</span>
+        <span class="desc">Exchange credentials for a signed JWT.</span>
+      </div>
+      <div class="row">
+        <span class="method post">POST</span>
+        <span class="path">/api/shorten <span class="lock">· requires auth</span></span>
+        <span class="desc">Shorten a URL and assign it to the caller.</span>
+      </div>
+      <div class="row">
+        <span class="method get">GET</span>
+        <span class="path">/api/urls <span class="lock">· requires auth</span></span>
+        <span class="desc">List the caller's links with click counts.</span>
+      </div>
+      <div class="row">
+        <span class="method get">GET</span>
+        <span class="path">/{shortCode}</span>
+        <span class="desc">Redirect to the original URL and record the visit.</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Try it</h2>
+    <p class="hint">Run these in a terminal, or send the same three requests from Postman.</p>
+
+    <div class="steps">
+
+      <div class="step">
+        <p class="step-label"><b>1.</b> Create an account</p>
+        <pre><code>curl -X POST https://go.adityag.dev/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"demo_user","password":"demo-password-123"}'</code></pre>
+      </div>
+
+      <div class="step">
+        <p class="step-label"><b>2.</b> Log in to get a token</p>
+        <pre><code>curl -X POST https://go.adityag.dev/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"demo_user","password":"demo-password-123"}'</code></pre>
+        <p class="ret">→ {"token":"eyJhbGciOiJIUzI1NiJ9..."}</p>
+      </div>
+
+      <div class="step">
+        <p class="step-label"><b>3.</b> Shorten a URL with that token</p>
+        <pre><code>curl -X POST https://go.adityag.dev/api/shorten \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"url":"https://example.com/a/very/long/path"}'</code></pre>
+        <p class="ret">→ {"shortUrl":"https://go.adityag.dev/abc"}</p>
+      </div>
+
+    </div>
+
+    <p class="postman">
+      <strong>Using Postman?</strong> Same three requests. Set the body type to
+      <code>raw</code> → <code>JSON</code>, and on the protected routes use the
+      <strong>Authorization</strong> tab → <code>Bearer Token</code>, pasting the token
+      from step 2. Tokens are valid for 24 hours.
+    </p>
+  </section>
+
+  <section>
+    <h2>Built with</h2>
+    <ul class="stack">
+      <li>Java 21</li>
+      <li>Spring Boot 4</li>
+      <li>PostgreSQL</li>
+      <li>AWS EC2</li>
+      <li>nginx</li>
+      <li>Let's Encrypt</li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>Built by <strong>Aditya Gullapalli</strong></p>
+    <p>
+      <a href="https://github.com/Aditya1407g">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-2.91-.88-2.91-2.84 0-.56.2-1.02.53-1.38-.05-.13-.23-.66.05-1.37 0 0 .43-.14 1.41.53a4.8 4.8 0 0 1 1.28-.17c.44 0 .88.06 1.28.17.98-.67 1.41-.53 1.41-.53.28.71.1 1.24.05 1.37.33.36.53.82.53 1.38 0 1.97-1.14 2.64-2.92 2.84.3.26.56.76.56 1.53 0 1.11-.01 2-.01 2.27 0 .21.15.46.55.38A7.99 7.99 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+        </svg>
+        github.com/Aditya1407g
+      </a>
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>
