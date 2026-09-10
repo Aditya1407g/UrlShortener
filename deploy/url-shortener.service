@@ -10,9 +10,12 @@ WorkingDirectory=/home/ubuntu
 
 Environment="DB_URL=jdbc:postgresql://localhost:5432/urlshortener"
 Environment="DB_USERNAME=urlshortener_app"
-Environment="DB_PASSWORD=REPLACE_WITH_REAL_PASSWORD"
-Environment="JWT_SECRET=REPLACE_WITH_REAL_JWT_SECRET_STRING"
+Environment="DB_PASSWORD=REPLACE WITH REAL PASSWORD"
+Environment="JWT_SECRET=REPLACE WITH REAL JWTSECRET"
 Environment="APP_BASE_URL=https://go.adityag.dev"
+Environment="REDIS_HOST=localhost"
+Environment="REDIS_PASSWORD=REPLACE WITH REAL REDIS PASSWORD"
+
 
 ExecStart=/usr/bin/java -jar /home/ubuntu/url-shortener-0.0.1-SNAPSHOT.jar
 
