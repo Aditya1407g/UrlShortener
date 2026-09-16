@@ -19,10 +19,7 @@ public class ClickCountService {
     @Async
     public void incrementAsync(String shortcode){
         try {
-            urlRepository.findByShortCode(shortcode).ifPresent(url -> {
-                url.setClickCount(url.getClickCount()+1);
-                urlRepository.save(url);
-            });
+            urlRepository.incrementClickCount(shortcode);
         } catch (Exception ex) {
             log.warn("Async click count increment failed for shortcode {}", shortcode, ex);
         }

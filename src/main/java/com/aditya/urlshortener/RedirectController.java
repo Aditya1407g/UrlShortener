@@ -31,7 +31,7 @@ public class RedirectController {
     @GetMapping("/{shortCode}")
     public ResponseEntity<Void> redirect(@PathVariable String shortCode){
 
-        Optional<String> cachedUrl = urlCacheService.gelLongUrl(shortCode);
+        Optional<String> cachedUrl = urlCacheService.getLongUrl(shortCode);
 
 
         String longUrl;

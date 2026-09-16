@@ -16,11 +16,11 @@ public class UrlCacheService {
 
     private final RedisTemplate<String , String> redisTemplate;
 
-    private UrlCacheService(RedisTemplate<String , String> redisTemplate){
+    public UrlCacheService(RedisTemplate<String , String> redisTemplate){
         this.redisTemplate=redisTemplate;
     }
 
-    public Optional<String> gelLongUrl(String shortCode){
+    public Optional<String> getLongUrl(String shortCode){
         try {
             String longUrl = redisTemplate.opsForValue().get(KEY_PREFIX + shortCode);
             return Optional.ofNullable(longUrl);
