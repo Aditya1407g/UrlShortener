@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: urlshortener-postgres
+    environment:
+      POSTGRES_DB: urlshortener
+      POSTGRES_USER: urlshortener_app
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U urlshortener_app -d urlshortener"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: urlshortener-redis
+    command: redis-server --requirepass redispassword
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redispassword", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    container_name: urlshortener-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/urlshortener
+      DB_USERNAME: urlshortener_app
+      DB_PASSWORD: password
+      REDIS_HOST: redis
+      REDIS_PASSWORD: redispassword
+      JWT_SECRET: local-dev-secret-not-for-production-min-64-chars-long-abcdefghij
+      APP_BASE_URL: http://localhost:8080
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
+  redis_data:

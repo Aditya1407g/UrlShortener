@@ -1,0 +1,44 @@
+# Build artifacts
+target/
+build/
+out/
+
+# Maven wrapper (not needed if we use multi-stage build with mvn in container)
+# Actually — for multi-stage, we DO need mvnw. So don't ignore it.
+
+# IntelliJ / VS Code
+.idea/
+.vscode/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker itself
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Environment files (safety - never let these leak)
+.env
+.env.*
+*.env
+
+# AWS keys (extra safety)
+*.pem
+aws-keys/
+
+# Logs
+*.log
+logs/
+
+# README and docs (not needed at runtime)
+README.md
+docs/
+deploy/
