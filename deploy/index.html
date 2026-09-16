@@ -409,6 +409,12 @@
       <strong>Authorization</strong> tab → <code>Bearer Token</code>, pasting the token
       from step 2. Tokens are valid for 24 hours.
     </p>
+
+    <p class="postman">
+      <strong>Getting a 429?</strong> That is the rate limiter, not a broken API.
+      Register allows 3 attempts per IP and login allows 5, both refilling over a
+      minute or so. Wait a moment and retry.
+    </p>
   </section>
 
   <section>

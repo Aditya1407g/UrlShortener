@@ -12,13 +12,19 @@ These files describe the production deployment for the URL Shortener on AWS EC2.
 
 1. Install Java 21: `sudo apt install -y openjdk-21-jdk`
 2. Install Postgres 18+: `sudo apt install -y postgresql postgresql-contrib`
-3. Install nginx: `sudo apt install -y nginx`
-4. Install certbot: `sudo apt install -y certbot python3-certbot-nginx`
-5. Create database + app user (see main README)
-6. Copy `url-shortener.service` to `/etc/systemd/system/`, edit the Environment variables with real secrets
-7. Copy `url-shortener.nginx.conf` to `/etc/nginx/sites-available/url-shortener`, symlink to `sites-enabled/`
-8. Get HTTPS cert: `sudo certbot --nginx -d <your-domain>`
-9. `sudo systemctl enable url-shortener` and `sudo systemctl start url-shortener`
+3. Install Redis: `sudo apt install -y redis-server`
+4. Install nginx: `sudo apt install -y nginx`
+5. Install certbot: `sudo apt install -y certbot python3-certbot-nginx`
+6. Create database + app user (see main README)
+7. Set `requirepass` in `/etc/redis/redis.conf` to match `REDIS_PASSWORD`, confirm `bind` is `127.0.0.1 -::1`, then `sudo systemctl restart redis-server`
+8. Copy `url-shortener.service` to `/etc/systemd/system/`, edit the Environment variables with real secrets
+9. Copy `url-shortener.nginx.conf` to `/etc/nginx/sites-available/url-shortener`, symlink to `sites-enabled/`
+10. Get HTTPS cert: `sudo certbot --nginx -d <your-domain>`
+11. `sudo systemctl enable url-shortener` and `sudo systemctl start url-shortener`
+
+Redis backs both the redirect cache and the rate limiter. Both fail open, so
+skipping step 7 does not break the API — it leaves it running unthrottled with
+no caching, which is easy to miss. Confirm with `redis-cli -a <password> ping`.
 
 ### Deploy the landing page
 

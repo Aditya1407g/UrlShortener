@@ -4,7 +4,7 @@ A production-style URL shortening service built with Spring Boot and PostgreSQL,
 
 **Live:** [go.adityag.dev](https://go.adityag.dev)
 
-**Status:** Layer 1 complete and deployed to AWS EC2 behind nginx with HTTPS. Layer 2 in progress — JWT auth is done; caching, rate limiting, and click analytics are next.
+**Status:** Layer 1 complete and deployed to AWS EC2 behind nginx with HTTPS. Layer 2 in progress — JWT auth, Redis caching, and rate limiting are done; click analytics is next.
 
 ---
 
@@ -18,7 +18,10 @@ A production-style URL shortening service built with Spring Boot and PostgreSQL,
 
 - Shorten long URLs to compact base62 codes
 - Redirect from short URLs to originals (302) — public, no auth needed
-- Click count tracking per link
+- Redis cache-aside on the redirect path, so hot links resolve without touching PostgreSQL
+- Click count tracking per link, incremented asynchronously off the redirect path
+- Token-bucket rate limiting backed by Redis — per-user on shorten, per-IP on the auth routes
+- Graceful degradation — if Redis is unavailable, lookups fall back to PostgreSQL and rate limiting fails open rather than rejecting traffic
 - User registration with bcrypt password hashing
 - Login issuing a signed JWT (HS256, 24h expiry)
 - Stateless JWT authentication on all `/api/**` endpoints
@@ -34,7 +37,9 @@ A production-style URL shortening service built with Spring Boot and PostgreSQL,
 - Spring Security 7 (stateless, custom JWT filter)
 - JJWT 0.12.6
 - PostgreSQL 17+
+- Redis 7 (caching + rate limit state)
 - Spring Data JPA / Hibernate
+- Spring Data Redis (Lettuce)
 - Bean Validation (Hibernate Validator)
 - Maven
 
@@ -46,9 +51,9 @@ Examples below show the production host. Running locally, short links come back 
 
 | Method | Endpoint | Auth | Description | Status Codes |
 |---|---|---|---|---|
-| POST | `/api/auth/register` | — | Create a user account | 201, 400 |
-| POST | `/api/auth/login` | — | Exchange credentials for a JWT | 200, 400, 401 |
-| POST | `/api/shorten` | Bearer | Create a shortened URL | 201, 400, 401 |
+| POST | `/api/auth/register` | — | Create a user account | 201, 400, 429 |
+| POST | `/api/auth/login` | — | Exchange credentials for a JWT | 200, 400, 401, 429 |
+| POST | `/api/shorten` | Bearer | Create a shortened URL | 201, 400, 401, 429 |
 | GET | `/api/urls` | Bearer | List the caller's URLs | 200, 401 |
 | GET | `/{shortCode}` | — | Redirect to original URL | 302, 404 |
 
@@ -66,6 +71,29 @@ A request to an authenticated endpoint with a missing, malformed, or expired tok
     "status": 401,
     "error": "Unauthorized",
     "message": "Missing or invalid authentication token",
+    "timestamp": "2026-08-15T10:23:45"
+}
+```
+
+### Rate limits
+
+Three endpoints are throttled with a token bucket held in Redis. Each bucket allows a short burst up to its capacity, then refills at a steady rate, so normal use is unaffected while scripted abuse is not.
+
+| Endpoint | Scoped by | Burst | Sustained rate |
+|---|---|---|---|
+| `POST /api/shorten` | authenticated user | 20 | 1 every 3s |
+| `POST /api/auth/login` | client IP | 5 | 1 every 12s |
+| `POST /api/auth/register` | client IP | 3 | 1 every 20s |
+
+Scoping the auth routes by IP rather than by account is deliberate: a per-account limit on login would do nothing against credential stuffing, which tries many usernames from one source. `X-Forwarded-For` is honoured so the limit follows the real client through nginx rather than counting every request as coming from the proxy.
+
+Exceeding a limit returns 429 with a `Retry-After: 60` header:
+
+```json
+{
+    "status": 429,
+    "error": "Too Many Requests",
+    "message": "Rate limit exceeded. Try again shortly.",
     "timestamp": "2026-08-15T10:23:45"
 }
 ```
@@ -153,7 +181,9 @@ Requires a valid JWT. Returns only the links belonging to the caller.
 
 ### `GET /{shortCode}`
 
-Public. Redirects to the original URL (HTTP 302) and increments the click count on each visit.
+Public and not rate limited. Redirects to the original URL (HTTP 302) and records the visit.
+
+The lookup is cache-aside: Redis is checked first, and on a miss the row is read from PostgreSQL and cached for 24 hours. The click count is incremented asynchronously, so it is eventually consistent — a redirect never waits on the database write.
 
 **Not-found response (404):**
 ```json
@@ -173,6 +203,9 @@ Public. Redirects to the original URL (HTTP 302) and increments the click count 
 - Java 21
 - PostgreSQL 17+ running on `localhost:5432`
 - A database named `urlshortener`
+- Redis running on `localhost:6379`
+
+Redis is optional for local development. Both the cache and the rate limiter fail open, so the app starts and every endpoint works without it — you just lose caching and throttling, and the log fills with connection warnings.
 
 **Environment variables:**
 
@@ -185,6 +218,9 @@ Every setting is externalized in `application.properties`. All but `DB_PASSWORD`
 | `DB_USERNAME` | `postgres` |
 | `JWT_SECRET` | a local-dev-only literal (never used in production) |
 | `APP_BASE_URL` | `http://localhost:8080` |
+| `REDIS_HOST` | `localhost` |
+| `REDIS_PORT` | `6379` |
+| `REDIS_PASSWORD` | empty (no auth) |
 
 **Run:**
 ```bash
@@ -236,13 +272,26 @@ Supplied by the systemd unit. `APP_BASE_URL` is what makes returned short links 
 | `DB_PASSWORD` | *secret* |
 | `JWT_SECRET` | *secret* — must be at least 64 characters for HS256 |
 | `APP_BASE_URL` | `https://go.adityag.dev` |
+| `REDIS_HOST` | `localhost` |
+| `REDIS_PASSWORD` | *secret* — must match `requirepass` in `redis.conf` |
 
 ### Setup on a fresh Ubuntu 26.04 server
 
 **1. Install dependencies**
 ```bash
-sudo apt update && sudo apt install -y openjdk-21-jdk postgresql postgresql-contrib nginx certbot python3-certbot-nginx
+sudo apt update && sudo apt install -y openjdk-21-jdk postgresql postgresql-contrib redis-server nginx certbot python3-certbot-nginx
 ```
+
+Then lock Redis down. Set a password and confirm it only listens on loopback, since the app and Redis share one box and an exposed Redis needs no credentials by default:
+
+```bash
+sudo sed -i 's/^# *requirepass .*/requirepass your-strong-redis-password/' /etc/redis/redis.conf
+```
+```bash
+grep -E '^(bind|requirepass)' /etc/redis/redis.conf && sudo systemctl restart redis-server
+```
+
+`bind` should read `127.0.0.1 -::1`, and `requirepass` must match `REDIS_PASSWORD` in the systemd unit. Because both the cache and the rate limiter fail open, a Redis that is misconfigured or unreachable will not break the API — it will quietly leave it unthrottled, so verify this rather than assuming it.
 
 **2. Create the database and a dedicated app user**
 ```bash
@@ -329,6 +378,16 @@ Application logs go to the systemd journal under the `url-shortener` identifier.
 
 **BCrypt for password storage.** Per-password salting and a tunable work factor are built in, so hashes stay resistant as hardware improves.
 
+**Cache-aside by hand rather than `@Cacheable`.** The redirect path checks Redis, falls back to PostgreSQL on a miss, and populates the cache on the way out. Writing it explicitly keeps the fallback visible and makes it obvious that a Redis failure is a degraded read rather than an error — behaviour that annotation-driven caching hides.
+
+**Redis failures fail open.** Both `UrlCacheService` and `RateLimiter` catch their own exceptions and continue: a cache miss becomes a database read, and an unreachable rate limiter admits the request. For a link redirector, availability is worth more than strict throttling — the alternative is letting a Redis outage take down an API that PostgreSQL alone can still serve.
+
+**Short Redis timeouts.** Connect and read timeouts are capped at 200ms so a slow or hung Redis cannot add latency to the redirect path. A cache that stalls is worse than no cache.
+
+**The token bucket runs as a Lua script.** Evaluating the bucket in one atomic round trip stops two concurrent requests from reading the same token count and both being allowed. Refill is computed in floating point, so a sub-second gap still earns a fractional token and the limit refills smoothly instead of in one-second steps.
+
+**Click counts increment asynchronously with an atomic UPDATE.** `@Async` keeps the database write off the redirect response path, and `SET click_count = click_count + 1` means overlapping redirects for the same code cannot lose each other's increments the way a load-modify-save would.
+
 ---
 
 ## Known Limitations
@@ -338,6 +397,10 @@ Application logs go to the systemd journal under the `url-shortener` identifier.
 - Single EC2 instance with PostgreSQL co-located on the same box — no redundancy, and a restart is a brief outage.
 - Test coverage is a single context-load smoke test — unit and integration tests are planned below.
 - Because short codes come from sequential IDs, they are guessable. Ownership is enforced on `/api/urls`, but any known code is publicly resolvable by design.
+- A Redis outage silently disables rate limiting rather than failing closed. That is the intended trade-off, but it means throttling is only as available as Redis.
+- Cached entries are only evicted by their 24-hour TTL. That is safe while short codes are immutable and cannot be deleted; adding an edit or delete endpoint would require explicit invalidation.
+- Click counts are eventually consistent. The increment is fired asynchronously after the response, so a redirect that completes during a database outage is not retried and that click is lost.
+- The redirect endpoint is not rate limited, since it is the one path expected to take real traffic and is served from cache. A caching CDN or nginx-level limit is the better control there than an application filter.
 
 ---
 
@@ -345,8 +408,8 @@ Application logs go to the systemd journal under the `url-shortener` identifier.
 
 **Layer 2 — Production features (in progress):**
 - ~~**JWT authentication** — register/login endpoints, user-scoped URL ownership~~ ✅
-- **Redis caching** — cache short-code → long-URL lookups for hot links
-- **Rate limiting** — per-user throttling on shorten and redirect endpoints
+- ~~**Redis caching** — cache short-code → long-URL lookups for hot links~~ ✅
+- ~~**Rate limiting** — token bucket in Redis; per-user on shorten, per-IP on the auth routes~~ ✅
 - **Click analytics** — track time, country, referrer per redirect
 - **Test suite** — unit tests for base62/JWT, integration tests for auth and redirect flows
 
