@@ -2,10 +2,13 @@ package com.aditya.urlshortener;
 
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.DynamicUpdate;
 
 import java.time.LocalDateTime;
 
 @Entity
+@Table(name = "url")
+@DynamicUpdate
 public class Url {
 
     @Id
