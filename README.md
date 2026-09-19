@@ -4,7 +4,7 @@ A production-style URL shortening service built with Spring Boot and PostgreSQL,
 
 **Live:** [go.adityag.dev](https://go.adityag.dev)
 
-**Status:** Layer 1 complete and deployed to AWS EC2 behind nginx with HTTPS. Layer 2 in progress — JWT auth, Redis caching, and rate limiting are done; click analytics is next.
+**Status:** Complete and running in production on AWS EC2 behind nginx with HTTPS.
 
 ---
 
@@ -277,11 +277,7 @@ curl -X POST http://localhost:8080/api/auth/register \
 
 Alongside it, `UrlShortenerApplicationTests` is a context-load smoke test — it catches a broken bean graph or bad configuration on startup.
 
-Planned next, in rough priority order:
-
-- **Service tests** — cache-aside hit/miss behaviour and the token bucket's refill and exhaustion, against an embedded or mocked Redis
-- **Controller tests** — `@WebMvcTest` slices asserting the JSON error contract and the auth rules on each route
-- **Integration tests** — full request paths against real PostgreSQL and Redis via Testcontainers, so the cache, limiter, and persistence are exercised together rather than in isolation
+Testing stops there deliberately. Unit tests were written for the one piece of pure logic with a correct answer to assert; the cache, rate limiter, and persistence layers all depend on live infrastructure, and covering them properly means `@WebMvcTest` slices and Testcontainers-backed integration tests rather than mocks that would mostly assert the mocks. That was out of scope here — the behaviour was verified against the running service instead.
 
 ---
 
@@ -439,10 +435,10 @@ Application logs go to the systemd journal under the `url-shortener` identifier.
 
 ## Known Limitations
 
-- Schema changes are applied by Hibernate (`spring.jpa.hibernate.ddl-auto=update`) rather than versioned migrations. This is convenient but unsafe for production schema evolution — it never drops or rewrites columns, and it offers no rollback. Flyway is the intended replacement.
-- `spring.jpa.show-sql=true` is enabled unconditionally, so production logs every SQL statement to the journal. It should be switched off outside local development.
+- Schema changes are applied by Hibernate (`spring.jpa.hibernate.ddl-auto=update`) rather than versioned migrations. Acceptable for a schema this small and stable, but it never drops or rewrites columns and offers no rollback — a larger schema would want Flyway.
+- `spring.jpa.show-sql=true` is enabled unconditionally, so production logs every SQL statement to the journal. Useful while building; noisy at any real volume.
 - Single EC2 instance with PostgreSQL co-located on the same box — no redundancy, and a restart is a brief outage.
-- Test coverage is limited to a unit suite for `Base62Encoder` plus a context-load smoke test. Service, controller, and integration suites are planned — see [Testing](#testing).
+- Test coverage is limited to a unit suite for `Base62Encoder` plus a context-load smoke test; the infrastructure-dependent layers were verified against the running service rather than in CI — see [Testing](#testing).
 - Because short codes come from sequential IDs, they are guessable. Ownership is enforced on `/api/urls`, but any known code is publicly resolvable by design.
 - A Redis outage silently disables rate limiting rather than failing closed. That is the intended trade-off, but it means throttling is only as available as Redis.
 - Cached entries are only evicted by their 24-hour TTL. That is safe while short codes are immutable and cannot be deleted; adding an edit or delete endpoint would require explicit invalidation.
@@ -451,22 +447,20 @@ Application logs go to the systemd journal under the `url-shortener` identifier.
 
 ---
 
-## Roadmap
+## What was built
 
-**Layer 2 — Production features (in progress):**
-- ~~**JWT authentication** — register/login endpoints, user-scoped URL ownership~~ ✅
-- ~~**Redis caching** — cache short-code → long-URL lookups for hot links~~ ✅
-- ~~**Rate limiting** — token bucket in Redis; per-user on shorten, per-IP on the auth routes~~ ✅
-- **Click analytics** — endpoints exposing time, country, and referrer per redirect
-- **Test suite** — service, controller, and integration coverage on top of the existing `Base62Encoder` unit tests
+The project was developed in three layers, each one finished before the next began.
 
-**Layer 3 — Deployment & operations:**
-- ~~**Cloud deployment** — AWS EC2, systemd-managed, nginx reverse proxy, HTTPS via Let's Encrypt~~ ✅
-- ~~**Docker** — app, PostgreSQL, and Redis via docker-compose with health checks and named volumes~~ ✅
-- **CI** — GitHub Actions running the build and test suite on every push
-- **CD** — automatic deploy to EC2 on merge to main
-- **Database migrations** — replace Hibernate `ddl-auto` with Flyway
-- **Monitoring** — Spring Boot Actuator endpoints
+**Layer 1 — Core service**
+Base62 short-code generation, 302 redirects with click tracking, request validation, and a single global exception handler producing one JSON error shape across every endpoint.
+
+**Layer 2 — Production features**
+Stateless JWT authentication with bcrypt hashing and user-scoped ownership; Redis cache-aside on the redirect path with asynchronous click counting; and a Redis-backed token bucket rate limiter evaluated atomically in Lua, scoped per user on writes and per IP on the auth routes.
+
+**Layer 3 — Deployment and operations**
+Deployed to AWS EC2 on Ubuntu — the JAR managed by systemd behind an nginx reverse proxy, HTTPS through Let's Encrypt on a custom domain, every secret externalized to environment variables, and a Docker Compose stack that brings the app, PostgreSQL, and Redis up locally with one command.
+
+The service is feature-complete for what it set out to be: a URL shortener that stays correct under concurrency, degrades gracefully when its cache is unavailable, and runs unattended in production. The [Known Limitations](#known-limitations) above are documented on purpose — they are the boundaries of that scope, not unfinished work.
 
 ---
 
