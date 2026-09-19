@@ -27,7 +27,7 @@ A production-style URL shortening service built with Spring Boot and PostgreSQL,
 - Stateless JWT authentication on all `/api/**` endpoints
 - User-scoped URL ownership — each user only sees links they created
 - Input validation with detailed, per-field error responses
-- Global exception handling (400 / 401 / 404 / 500) with a consistent JSON shape
+- Global exception handling (400 / 401 / 404 / 429 / 500) with a consistent JSON shape
 - Persistent storage via PostgreSQL with auto-schema management (Hibernate DDL)
 
 ## Tech Stack
@@ -41,6 +41,8 @@ A production-style URL shortening service built with Spring Boot and PostgreSQL,
 - Spring Data JPA / Hibernate
 - Spring Data Redis (Lettuce)
 - Bean Validation (Hibernate Validator)
+- JUnit 5 (parameterized tests)
+- Docker / Docker Compose
 - Maven
 
 ---
@@ -197,7 +199,26 @@ The lookup is cache-aside: Redis is checked first, and on a miss the row is read
 
 ---
 
+## Quickstart with Docker
+
+Requirements: Docker Desktop, or Docker Engine with Compose.
+
+```bash
+git clone https://github.com/Aditya1407g/UrlShortener.git
+```
+```bash
+cd UrlShortener && docker-compose up
+```
+
+The app is available at `http://localhost:8080`. PostgreSQL and Redis start automatically alongside it, and Compose waits for both to pass a health check before launching the app. Data persists between restarts in named volumes (`postgres_data`, `redis_data`).
+
+Only port 8080 is published — the database and Redis are reachable from the app container but not from the host. Credentials in `docker-compose.yml` are local-development defaults and are not used anywhere else.
+
+---
+
 ## Local Setup
+
+Running the services yourself, as an alternative to the Docker quickstart above.
 
 **Prerequisites:**
 - Java 21
@@ -235,6 +256,32 @@ curl -X POST http://localhost:8080/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{"username":"aditya","password":"hunter2hunter2"}'
 ```
+
+---
+
+## Testing
+
+```bash
+./mvnw test
+```
+
+`Base62EncoderTest` covers the short-code encoder, the piece of logic where an off-by-one silently corrupts every link it produces. Nine parameterized cases pin the boundaries where the alphabet rolls over, plus a determinism check that the same ID always encodes to the same code:
+
+| Input | Expected | Boundary |
+|---|---|---|
+| `0`, `1` | `0`, `1` | zero and the first code |
+| `10`, `35` | `a`, `z` | digits into lowercase, end of lowercase |
+| `36`, `61` | `A`, `Z` | lowercase into uppercase, end of the alphabet |
+| `62` | `10` | first two-character code |
+| `3843`, `3844` | `ZZ`, `100` | two characters into three |
+
+Alongside it, `UrlShortenerApplicationTests` is a context-load smoke test — it catches a broken bean graph or bad configuration on startup.
+
+Planned next, in rough priority order:
+
+- **Service tests** — cache-aside hit/miss behaviour and the token bucket's refill and exhaustion, against an embedded or mocked Redis
+- **Controller tests** — `@WebMvcTest` slices asserting the JSON error contract and the auth rules on each route
+- **Integration tests** — full request paths against real PostgreSQL and Redis via Testcontainers, so the cache, limiter, and persistence are exercised together rather than in isolation
 
 ---
 
@@ -395,7 +442,7 @@ Application logs go to the systemd journal under the `url-shortener` identifier.
 - Schema changes are applied by Hibernate (`spring.jpa.hibernate.ddl-auto=update`) rather than versioned migrations. This is convenient but unsafe for production schema evolution — it never drops or rewrites columns, and it offers no rollback. Flyway is the intended replacement.
 - `spring.jpa.show-sql=true` is enabled unconditionally, so production logs every SQL statement to the journal. It should be switched off outside local development.
 - Single EC2 instance with PostgreSQL co-located on the same box — no redundancy, and a restart is a brief outage.
-- Test coverage is a single context-load smoke test — unit and integration tests are planned below.
+- Test coverage is limited to a unit suite for `Base62Encoder` plus a context-load smoke test. Service, controller, and integration suites are planned — see [Testing](#testing).
 - Because short codes come from sequential IDs, they are guessable. Ownership is enforced on `/api/urls`, but any known code is publicly resolvable by design.
 - A Redis outage silently disables rate limiting rather than failing closed. That is the intended trade-off, but it means throttling is only as available as Redis.
 - Cached entries are only evicted by their 24-hour TTL. That is safe while short codes are immutable and cannot be deleted; adding an edit or delete endpoint would require explicit invalidation.
@@ -410,13 +457,14 @@ Application logs go to the systemd journal under the `url-shortener` identifier.
 - ~~**JWT authentication** — register/login endpoints, user-scoped URL ownership~~ ✅
 - ~~**Redis caching** — cache short-code → long-URL lookups for hot links~~ ✅
 - ~~**Rate limiting** — token bucket in Redis; per-user on shorten, per-IP on the auth routes~~ ✅
-- **Click analytics** — track time, country, referrer per redirect
-- **Test suite** — unit tests for base62/JWT, integration tests for auth and redirect flows
+- **Click analytics** — endpoints exposing time, country, and referrer per redirect
+- **Test suite** — service, controller, and integration coverage on top of the existing `Base62Encoder` unit tests
 
 **Layer 3 — Deployment & operations:**
 - ~~**Cloud deployment** — AWS EC2, systemd-managed, nginx reverse proxy, HTTPS via Let's Encrypt~~ ✅
-- **Docker** — containerize the app + Postgres via docker-compose
-- **CI/CD** — GitHub Actions for build, test, deploy on push to main
+- ~~**Docker** — app, PostgreSQL, and Redis via docker-compose with health checks and named volumes~~ ✅
+- **CI** — GitHub Actions running the build and test suite on every push
+- **CD** — automatic deploy to EC2 on merge to main
 - **Database migrations** — replace Hibernate `ddl-auto` with Flyway
 - **Monitoring** — Spring Boot Actuator endpoints
 
